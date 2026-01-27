@@ -224,6 +224,18 @@ async function loadSnapshot() {
       const eventPositions = data.positions?.event_positions || [];
       const positions = data.positions?.positions || data.positions?.portfolio?.positions || data.positions?.data || [];
       const merged = positions.length ? positions : [...marketPositions, ...eventPositions];
+      const marketByTicker = {};
+      (data.event_markets || []).forEach((m) => {
+        if (m && m.ticker) {
+          marketByTicker[m.ticker] = m;
+        }
+      });
+      const orderbookByTicker = {};
+      (data.event_orderbooks || []).forEach((book) => {
+        if (book && book.ticker) {
+          orderbookByTicker[book.ticker] = book;
+        }
+      });
       if (!merged.length) {
         const empty = document.createElement('div');
         empty.className = 'positions__row';
@@ -237,14 +249,61 @@ async function loadSnapshot() {
           const ticker = document.createElement('span');
           ticker.textContent = pos.ticker ?? pos.event_ticker ?? '—';
           const net = document.createElement('span');
-          const netVal = pos.position ?? pos.net_position ?? pos.count ?? pos.size ?? pos.total_cost_shares_fp ?? pos.total_cost_shares ?? 0;
+          const netVal =
+            pos.position ??
+            pos.net_position ??
+            pos.count ??
+            pos.size ??
+            pos.total_cost_shares_fp ??
+            pos.total_cost_shares ??
+            0;
           net.textContent = `Net: ${netVal}`;
+
           const pnl = document.createElement('span');
-          const pnlVal = pos.unrealized_pnl ?? pos.realized_pnl ?? null;
-          if (typeof pnlVal === 'number') {
-            pnl.textContent = `PnL: ${(pnlVal / 100).toFixed(2)}`;
+          const tickerKey = pos.ticker ?? pos.event_ticker;
+          const positionVal = typeof pos.position === 'number' ? pos.position : null;
+          const totalTraded = typeof pos.total_traded === 'number' ? pos.total_traded : null;
+          const market = tickerKey ? marketByTicker[tickerKey] : null;
+          const lastPrice = market && typeof market.last_price === 'number' ? market.last_price : null;
+          const book = tickerKey ? orderbookByTicker[tickerKey] : null;
+          const bestYes = book && Array.isArray(book.yes) && book.yes.length ? book.yes[0].price : null;
+          const bestNo = book && Array.isArray(book.no) && book.no.length ? book.no[0].price : null;
+          let markYes = null;
+          if (typeof bestYes === 'number' && typeof bestNo === 'number') {
+            markYes = (bestYes + (100 - bestNo)) / 2;
+          } else if (typeof bestYes === 'number') {
+            markYes = bestYes;
+          } else if (typeof bestNo === 'number') {
+            markYes = 100 - bestNo;
+          } else if (typeof lastPrice === 'number') {
+            markYes = lastPrice;
+          }
+          let unrealized = null;
+          if (positionVal != null && totalTraded != null && lastPrice != null && positionVal !== 0) {
+            const absPos = Math.abs(positionVal);
+            const avgPrice = totalTraded / absPos;
+            if (markYes != null) {
+              if (positionVal > 0) {
+                unrealized = (markYes - avgPrice) * absPos;
+              } else {
+                const markNo = 100 - markYes;
+                unrealized = (markNo - avgPrice) * absPos;
+              }
+            }
+          }
+
+          if (unrealized != null) {
+            pnl.textContent = `Unrealized PnL (mark-to-mid): $${(unrealized / 100).toFixed(2)}`;
           } else {
-            pnl.textContent = 'PnL: —';
+            const realizedDollars = pos.realized_pnl_dollars;
+            const realizedCents = pos.realized_pnl;
+            if (realizedDollars != null) {
+              pnl.textContent = `Realized PnL: $${Number(realizedDollars).toFixed(2)}`;
+            } else if (typeof realizedCents === 'number') {
+              pnl.textContent = `Realized PnL: $${(realizedCents / 100).toFixed(2)}`;
+            } else {
+              pnl.textContent = 'PnL: —';
+            }
           }
           row.appendChild(ticker);
           row.appendChild(net);
