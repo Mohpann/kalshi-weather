@@ -6,10 +6,12 @@ async function loadSnapshot() {
   const eventMarketsEl = document.querySelector('[data-field="event-markets"]');
   const eventTickerEl = document.querySelector('[data-field="event-ticker"]');
   const updatedEl = document.querySelector('[data-field="updated"]');
+  const healthEl = document.querySelector('[data-field="health"]');
   const modelsEl = document.querySelector('[data-field="models"]');
   const forecastHighEl = document.querySelector('[data-field="forecast-high"]');
   const opportunitiesEl = document.querySelector('[data-field="opportunities"]');
   const portfolioEl = document.querySelector('[data-field="portfolio"]');
+  const cashEl = document.querySelector('[data-field="cash"]');
   const ordersNoteEl = document.querySelector('[data-field="orders-note"]');
   const positionsEl = document.querySelector('[data-field="positions"]');
   const ordersEl = document.querySelector('[data-field="orders"]');
@@ -67,6 +69,24 @@ async function loadSnapshot() {
         updatedEl.textContent = '—';
       }
     }
+    if (healthEl) {
+      let ageText = 'age —';
+      if (data.timestamp) {
+        const date = new Date(data.timestamp);
+        if (!Number.isNaN(date.getTime())) {
+          const ageSeconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+          if (ageSeconds < 60) {
+            ageText = `${ageSeconds}s`;
+          } else if (ageSeconds < 3600) {
+            ageText = `${Math.floor(ageSeconds / 60)}m`;
+          } else {
+            ageText = `${Math.floor(ageSeconds / 3600)}h`;
+          }
+        }
+      }
+      const source = data.weather?.source || 'unknown';
+      healthEl.textContent = `source ${source} · age ${ageText}`;
+    }
     if (modelsEl) {
       const gfs = data.open_meteo?.gfs_high;
       const ecmwf = data.open_meteo?.ecmwf_high;
@@ -91,11 +111,22 @@ async function loadSnapshot() {
       }
     }
     if (portfolioEl) {
+      const portfolioValue = data.portfolio?.portfolio_value;
       const balance = data.portfolio?.balance;
-      if (typeof balance === 'number') {
+      if (typeof portfolioValue === 'number') {
+        portfolioEl.textContent = `$${(portfolioValue / 100).toFixed(2)}`;
+      } else if (typeof balance === 'number') {
         portfolioEl.textContent = `$${(balance / 100).toFixed(2)}`;
       } else {
         portfolioEl.textContent = '—';
+      }
+    }
+    if (cashEl) {
+      const balance = data.portfolio?.balance;
+      if (typeof balance === 'number') {
+        cashEl.textContent = `$${(balance / 100).toFixed(2)}`;
+      } else {
+        cashEl.textContent = '—';
       }
     }
     if (ordersNoteEl) {
@@ -189,25 +220,32 @@ async function loadSnapshot() {
 
     if (positionsEl) {
       positionsEl.innerHTML = '';
+      const marketPositions = data.positions?.market_positions || [];
+      const eventPositions = data.positions?.event_positions || [];
       const positions = data.positions?.positions || data.positions?.portfolio?.positions || data.positions?.data || [];
-      if (!positions.length) {
+      const merged = positions.length ? positions : [...marketPositions, ...eventPositions];
+      if (!merged.length) {
         const empty = document.createElement('div');
         empty.className = 'positions__row';
         empty.textContent = 'No positions loaded';
         positionsEl.appendChild(empty);
       } else {
-        positions.forEach((pos) => {
-          if (!pos || !pos.ticker) return;
+        merged.forEach((pos) => {
+          if (!pos) return;
           const row = document.createElement('div');
           row.className = 'positions__row';
           const ticker = document.createElement('span');
-          ticker.textContent = pos.ticker;
+          ticker.textContent = pos.ticker ?? pos.event_ticker ?? '—';
           const net = document.createElement('span');
-          const netVal = pos.position ?? pos.net_position ?? pos.count ?? pos.size ?? 0;
+          const netVal = pos.position ?? pos.net_position ?? pos.count ?? pos.size ?? pos.total_cost_shares_fp ?? pos.total_cost_shares ?? 0;
           net.textContent = `Net: ${netVal}`;
           const pnl = document.createElement('span');
           const pnlVal = pos.unrealized_pnl ?? pos.realized_pnl ?? null;
-          pnl.textContent = pnlVal != null ? `PnL: ${pnlVal}` : 'PnL: —';
+          if (typeof pnlVal === 'number') {
+            pnl.textContent = `PnL: ${(pnlVal / 100).toFixed(2)}`;
+          } else {
+            pnl.textContent = 'PnL: —';
+          }
           row.appendChild(ticker);
           row.appendChild(net);
           row.appendChild(pnl);
@@ -341,8 +379,14 @@ async function loadSnapshot() {
     if (forecastHighEl) {
       forecastHighEl.textContent = '—';
     }
+    if (healthEl) {
+      healthEl.textContent = 'source unknown · age —';
+    }
     if (portfolioEl) {
       portfolioEl.textContent = '—';
+    }
+    if (cashEl) {
+      cashEl.textContent = '—';
     }
     if (ordersNoteEl) {
       ordersNoteEl.textContent = '—';

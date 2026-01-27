@@ -10,10 +10,7 @@ pip install -r requirements.txt
 #    - kalshi_public.txt
 #    - kalshi_private.pem
 
-# 3. Enter current weather data
-python3 manual_weather_input.py
-
-# 4. Run bot
+# 3. Run bot
 python3 main.py
 
 # OR use the quick start script:
@@ -22,15 +19,9 @@ python3 main.py
 
 ## Daily Workflow
 
-1. **Morning**: Update weather data with overnight low
-2. **Throughout day**: Update as temperature changes
-3. **Monitor bot**: Watch for trading opportunities
-4. **Evening**: Final update when high is established
-
-```bash
-# Update weather anytime:
-python3 manual_weather_input.py
-```
+1. **Morning**: Verify NWS/Meteosource updates are flowing
+2. **Throughout day**: Monitor bot for trading opportunities
+3. **Evening**: Confirm daily high on dashboard
 
 ## Project Structure
 
@@ -39,14 +30,14 @@ kalshi-weather-boy-v2/
 ├── main.py                   # Bot entry point (heartbeat loop)
 ├── kalshi_auth.py           # RSA-PSS authentication
 ├── kalshi_client.py         # Kalshi API wrapper
-├── weather_scraper.py       # Weather data (with manual fallback)
-├── manual_weather_input.py  # Manual weather entry tool
+├── weather_scraper.py       # Weather data (API sources)
+├── nws_client.py            # NWS API client
+├── meteosource_client.py    # Meteosource API client
 ├── test_setup.py            # System verification
 ├── run.sh                   # Quick start script
 ├── requirements.txt         # Python dependencies
 ├── kalshi_public.txt        # Your API key (DO NOT COMMIT)
 ├── kalshi_private.pem       # Your private key (DO NOT COMMIT)
-├── weather_data.json        # Current weather (created by manual_weather_input.py)
 ├── README.md                # Full documentation
 └── .github/
     └── copilot-instructions.md  # AI agent guide
@@ -114,14 +105,12 @@ python3 -c "from kalshi_client import KalshiClient; \
 c = KalshiClient('$(cat kalshi_public.txt)', 'kalshi_private.pem', 'https://demo-api.kalshi.co'); \
 print(c.get_balance())"
 
-# View current weather data
-python3 -c "import json; print(json.dumps(json.load(open('weather_data.json')), indent=2))"
 ```
 
 ## Common Issues
 
 **"406 Not Acceptable" from wethr.net**
-→ Use `manual_weather_input.py` to enter data manually
+→ NWS/Meteosource should still provide data; wethr.net is only a last-resort scrape
 
 **"Connection refused" to Kalshi**
 → Check internet connection, verify API endpoint

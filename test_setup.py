@@ -5,8 +5,14 @@ Test script for the Kalshi Weather Trading Bot
 Tests each component individually to verify setup.
 """
 
+import os
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 def test_imports():
@@ -26,22 +32,23 @@ def test_imports():
 def test_api_keys():
     """Test that API keys are present."""
     print("Testing API keys...")
-    
-    public_key = Path("kalshi_public.txt")
-    private_key = Path("kalshi_private.pem")
-    
-    if not public_key.exists():
-        print("  ✗ kalshi_public.txt not found\n")
-        return False
-    
+    api_key = os.getenv("KALSHI_API_KEY")
+    private_key_path = os.getenv("KALSHI_PRIVATE_KEY", "kalshi_private.pem")
+
+    if not api_key:
+        public_key = Path("kalshi_public.txt")
+        if not public_key.exists():
+            print("  ✗ Missing KALSHI_API_KEY and kalshi_public.txt\n")
+            return False
+        with open(public_key) as f:
+            api_key = f.read().strip()
+
+    private_key = Path(private_key_path)
     if not private_key.exists():
-        print("  ✗ kalshi_private.pem not found\n")
+        print(f"  ✗ Private key not found at {private_key_path}\n")
         return False
-    
-    with open(public_key) as f:
-        api_key = f.read().strip()
-    
-    print(f"  ✓ Public key found: {api_key[:8]}...")
+
+    print(f"  ✓ Public key loaded: {api_key[:8]}...")
     print(f"  ✓ Private key found: {private_key}")
     print()
     return True
@@ -53,10 +60,13 @@ def test_auth_module():
     try:
         from kalshi_auth import KalshiAuth
         
-        with open("kalshi_public.txt") as f:
-            api_key = f.read().strip()
-        
-        auth = KalshiAuth(api_key, "kalshi_private.pem")
+        api_key = os.getenv("KALSHI_API_KEY")
+        private_key_path = os.getenv("KALSHI_PRIVATE_KEY", "kalshi_private.pem")
+        if not api_key:
+            with open("kalshi_public.txt") as f:
+                api_key = f.read().strip()
+
+        auth = KalshiAuth(api_key, private_key_path)
         headers = auth.get_headers("GET", "/trade-api/v2/portfolio/balance")
         
         assert 'KALSHI-ACCESS-KEY' in headers
@@ -77,11 +87,14 @@ def test_kalshi_connection():
     try:
         from kalshi_client import KalshiClient
         
-        with open("kalshi_public.txt") as f:
-            api_key = f.read().strip()
+        api_key = os.getenv("KALSHI_API_KEY")
+        private_key_path = os.getenv("KALSHI_PRIVATE_KEY", "kalshi_private.pem")
+        if not api_key:
+            with open("kalshi_public.txt") as f:
+                api_key = f.read().strip()
         
         # Try demo API first (less likely to have network issues)
-        client = KalshiClient(api_key, "kalshi_private.pem", "https://demo-api.kalshi.co")
+        client = KalshiClient(api_key, private_key_path, "https://demo-api.kalshi.co")
         status = client.get_exchange_status()
         exchange_status = status.get("exchange_status")
         if exchange_status is None:
@@ -106,10 +119,13 @@ def test_market_data():
         from kalshi_client import KalshiClient
         from main import WeatherTradingBot
         
-        with open("kalshi_public.txt") as f:
-            api_key = f.read().strip()
+        api_key = os.getenv("KALSHI_API_KEY")
+        private_key_path = os.getenv("KALSHI_PRIVATE_KEY", "kalshi_private.pem")
+        if not api_key:
+            with open("kalshi_public.txt") as f:
+                api_key = f.read().strip()
         
-        bot = WeatherTradingBot(api_key, "kalshi_private.pem", "https://demo-api.kalshi.co")
+        bot = WeatherTradingBot(api_key, private_key_path, "https://demo-api.kalshi.co")
         ticker = bot.get_todays_market_ticker()
         
         print(f"  Today's market ticker: {ticker}")

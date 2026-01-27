@@ -4,6 +4,7 @@
 kalshi_public.txt
 kalshi_private.pem
 .env
+api-keys/meteosource.txt
 
 # Python
 __pycache__/

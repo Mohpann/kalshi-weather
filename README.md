@@ -63,13 +63,7 @@ pip install -r requirements.txt
 
 ### Weather Data
 
-**Important**: wethr.net blocks automated scraping with 406 errors. Use manual data entry:
-
-```bash
-python3 manual_weather_input.py
-```
-
-This creates `weather_data.json` which the bot reads. Update this file periodically throughout the day as temperatures change.
+**Important**: wethr.net blocks automated scraping with 406 errors. The bot now uses NWS + Meteosource by default.
 
 ### Configuration
 
@@ -85,10 +79,7 @@ base_url = "https://demo-api.kalshi.co"  # Demo/testing
 ### Run the Bot
 
 ```bash
-# Step 1: Enter current weather data
-python3 manual_weather_input.py
-
-# Step 2: Start the bot
+# Step 1: Start the bot
 python3 main.py
 ```
 
@@ -210,17 +201,14 @@ python3 -c "from kalshi_client import KalshiClient; \
 c = KalshiClient('$(cat kalshi_public.txt)', 'kalshi_private.pem', 'https://demo-api.kalshi.co'); \
 print(c.get_balance())"
 
-# Enter weather data manually
-python3 manual_weather_input.py
 ```
 
 ### Alternative Weather Data Sources
 
-Since wethr.net blocks scraping, consider:
-1. **Manual entry** (current solution via `manual_weather_input.py`)
-2. **Browser automation** (Selenium/Playwright to bypass detection)
-3. **Commercial APIs** (Weather.com API, OpenWeatherMap, etc.)
-4. **Official sources** (NOAA/NWS ASOS data for KMIA station)
+Since wethr.net blocks scraping, the bot now uses:
+1. **NWS API** (NOAA station observations)
+2. **Meteosource API** (free tier)
+3. **Open‑Meteo** (forecast cross-check)
 
 ## Important Notes
 
@@ -237,7 +225,7 @@ Since wethr.net blocks scraping, consider:
 - Monitor for API rate limits
 
 ### Data Sources
-- **Weather**: [wethr.net/market/miami](https://wethr.net/market/miami)
+- **Weather**: NWS API + Meteosource (wethr.net only as a last-resort scrape)
 - **Market**: [kalshi.com/markets/kxhighmia](https://kalshi.com/markets/kxhighmia)
 - **API Docs**: [docs.kalshi.com](https://docs.kalshi.com)
 
@@ -248,7 +236,10 @@ kalshi-weather-boy-v2/
 ├── main.py                 # Main bot entry point
 ├── kalshi_auth.py         # Authentication logic
 ├── kalshi_client.py       # Kalshi API wrapper
-├── weather_scraper.py     # Wethr.net scraper
+├── weather_scraper.py     # Weather fetch + fallback chain
+├── nws_client.py          # NWS API client
+├── meteosource_client.py  # Meteosource API client
+├── open_meteo.py          # Open-Meteo forecasts
 ├── requirements.txt       # Python dependencies
 ├── .gitignore            # Git ignore (includes API keys)
 ├── kalshi_public.txt     # Your API key (not in git)
