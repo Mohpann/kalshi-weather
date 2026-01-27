@@ -101,6 +101,25 @@ python3 app.py
 
 Open `http://localhost:5000` in your browser.
 
+### Open-Meteo Cross-Check
+
+Optional: pull GFS/ECMWF daily highs from Open-Meteo for the KMIA station.
+
+```bash
+export OPEN_METEO_ENABLED=true
+export OPEN_METEO_LAT=25.78805
+export OPEN_METEO_LON=-80.31694
+```
+
+### Live Logs (WebSocket)
+
+The frontend streams `main.py` logs over WebSocket at `/ws/logs`. Start the bot to generate logs:
+
+```bash
+export BOT_LOG_FILE=bot.log
+python3 main.py
+```
+
 The bot will:
 1. Authenticate with Kalshi API
 2. Display your account balance

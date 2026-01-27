@@ -17,7 +17,7 @@ echo "✓ Python 3 found"
 # Check dependencies
 echo ""
 echo "Checking dependencies..."
-if python3 -c "import requests, cryptography, bs4" 2>/dev/null; then
+if python3 -c "import requests, cryptography, bs4, flask" 2>/dev/null; then
     echo "✓ All dependencies installed"
 else
     echo "⚠ Installing dependencies..."
@@ -37,6 +37,22 @@ else
     exit 1
 fi
 
+# Optional: Open-Meteo defaults
+export OPEN_METEO_ENABLED=${OPEN_METEO_ENABLED:-true}
+export OPEN_METEO_LAT=${OPEN_METEO_LAT:-25.78805}
+export OPEN_METEO_LON=${OPEN_METEO_LON:--80.31694}
+
+# Optional: Event ticker (example: KXHIGHMIA-26JAN27)
+if [ -z "$KALSHI_EVENT_TICKER" ]; then
+    echo ""
+    echo "KALSHI_EVENT_TICKER not set (e.g., KXHIGHMIA-26JAN27)."
+    echo "Enter event ticker (or leave blank to skip):"
+    read -r event_input
+    if [ -n "$event_input" ]; then
+        export KALSHI_EVENT_TICKER="$event_input"
+    fi
+fi
+
 # Check weather data
 echo ""
 echo "Checking weather data..."
@@ -54,9 +70,8 @@ else
         python3 manual_weather_input.py
     else
         echo ""
-        echo "⚠ Bot will not work without weather data"
-        echo "  Run: python3 manual_weather_input.py"
-        exit 1
+        echo "⚠ Continuing without weather data (bot will run with limited info)"
+        echo "  You can add it later: python3 manual_weather_input.py"
     fi
 fi
 
@@ -68,4 +83,12 @@ echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
-python3 main.py
+python3 main.py &
+bot_pid=$!
+
+echo "Starting Flask frontend..."
+python3 app.py &
+web_pid=$!
+
+trap "echo ''; echo 'Stopping...'; kill $bot_pid $web_pid 2>/dev/null" INT TERM
+wait

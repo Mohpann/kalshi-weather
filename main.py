@@ -8,12 +8,15 @@ by comparing real-time weather data from wethr.net with market prices.
 import os
 import time
 import re
+import sys
+import json
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from kalshi_client import KalshiClient
 from weather_scraper import WeatherScraper
+from open_meteo import OpenMeteoClient
 
 
 class WeatherTradingBot:
@@ -27,16 +30,27 @@ class WeatherTradingBot:
         private_key_path: str,
         base_url: str = "https://api.elections.kalshi.com",
         series_ticker: str = "KXHIGHMIA",
+        event_ticker: Optional[str] = None,
         market_ticker_override: Optional[str] = None,
         request_timeout: int = 15,
         max_retries: int = 3,
         backoff_factor: float = 0.5,
         weather_timeout: int = 10,
+        orderbook_depth: int = 10,
+        event_market_limit: int = 200,
+        event_orderbook_limit: int = 50,
+        event_markets_interval: int = 300,
+        event_orderbook_interval: int = 120,
+        open_meteo_enabled: bool = True,
+        open_meteo_lat: float = 25.78805,
+        open_meteo_lon: float = -80.31694,
+        open_meteo_interval: int = 900,
         max_order_size: int = 5,
         max_position: int = 20,
         min_edge_cents: int = 2,
         fee_cents: float = 0.0,
         trade_enabled: bool = False,
+        orders_note: Optional[str] = None,
     ):
         """
         Initialize the trading bot.
@@ -46,16 +60,27 @@ class WeatherTradingBot:
             private_key_path: Path to private key file
             base_url: Kalshi API base URL
             series_ticker: Kalshi series ticker (e.g., KXHIGHMIA)
+            event_ticker: Kalshi event ticker (e.g., KXHIGHMIA-26JAN26)
             market_ticker_override: Override exact market ticker if needed
             request_timeout: HTTP timeout in seconds
             max_retries: Max HTTP retries for transient errors
             backoff_factor: HTTP retry backoff factor
             weather_timeout: Weather scraper timeout in seconds
+            orderbook_depth: Depth for orderbook snapshots
+            event_market_limit: Max markets to pull for event
+            event_orderbook_limit: Max markets to fetch orderbooks for per cycle
+            event_markets_interval: Seconds between event market refreshes
+            event_orderbook_interval: Seconds between event orderbook refreshes
+            open_meteo_enabled: Whether to pull Open-Meteo forecasts
+            open_meteo_lat: Latitude for forecasts
+            open_meteo_lon: Longitude for forecasts
+            open_meteo_interval: Seconds between forecast refreshes
             max_order_size: Max contracts per order
             max_position: Max total contracts per ticker
             min_edge_cents: Minimum expected edge (cents) to trade
             fee_cents: Estimated fee per contract (cents)
             trade_enabled: If True, submit orders automatically
+            orders_note: Optional manual note about recent orders
         """
         self.kalshi = KalshiClient(
             api_key_id,
@@ -67,13 +92,47 @@ class WeatherTradingBot:
         )
         self.weather = WeatherScraper(timeout=weather_timeout)
         self.series_ticker = series_ticker
+        self.event_ticker = event_ticker
         self.market_ticker_override = market_ticker_override
         self.market_ticker = None  # Will be set dynamically
+        self.orderbook_depth = orderbook_depth
+        self.event_market_limit = event_market_limit
+        self.event_orderbook_limit = event_orderbook_limit
+        self.event_markets_interval = event_markets_interval
+        self.event_orderbook_interval = event_orderbook_interval
+        self._last_event_markets_ts = 0.0
+        self._last_event_orderbooks_ts = 0.0
+        self._cached_event_markets = []
+        self._cached_event_orderbooks = []
+        self.open_meteo_enabled = open_meteo_enabled
+        self.open_meteo_lat = open_meteo_lat
+        self.open_meteo_lon = open_meteo_lon
+        self.open_meteo_interval = open_meteo_interval
+        self._last_open_meteo_ts = 0.0
+        self._cached_open_meteo = {}
+        self._open_meteo = OpenMeteoClient(timeout=request_timeout)
         self.max_order_size = max_order_size
         self.max_position = max_position
         self.min_edge_cents = min_edge_cents
         self.fee_cents = fee_cents
         self.trade_enabled = trade_enabled
+        self.orders_note = orders_note
+
+    @staticmethod
+    def _normalize_bids(bids: List, depth: int = 10) -> List[Dict]:
+        normalized = []
+        for bid in (bids or [])[:depth]:
+            if isinstance(bid, dict):
+                price = bid.get("price")
+                count = bid.get("count")
+            elif isinstance(bid, (list, tuple)):
+                price = bid[0] if len(bid) > 0 else None
+                count = bid[1] if len(bid) > 1 else None
+            else:
+                price = None
+                count = None
+            normalized.append({"price": price, "count": count})
+        return normalized
         
     def get_todays_market_ticker(self) -> Optional[str]:
         """
@@ -267,10 +326,10 @@ class WeatherTradingBot:
             print(f"Warning: failed to fetch positions ({e})")
             return 0
     
-    def get_market_data(self) -> Dict:
+    def get_market_data(self, ticker: Optional[str] = None) -> Dict:
         """Fetch current market data for Miami temperature."""
         try:
-            ticker = self.resolve_market_ticker()
+            ticker = ticker or self.resolve_market_ticker()
             if not ticker:
                 return {}
             print(f"Fetching market data for: {ticker}")
@@ -281,13 +340,13 @@ class WeatherTradingBot:
             print(f"Error fetching market data: {e}")
             return {}
     
-    def get_orderbook(self) -> Dict:
+    def get_orderbook(self, ticker: Optional[str] = None, depth: Optional[int] = None) -> Dict:
         """Fetch the order book for the Miami temperature market."""
         try:
-            ticker = self.resolve_market_ticker()
+            ticker = ticker or self.resolve_market_ticker()
             if not ticker:
                 return {}
-            orderbook = self.kalshi.get_market_orderbook(ticker, depth=10)
+            orderbook = self.kalshi.get_market_orderbook(ticker, depth=depth or self.orderbook_depth)
             return orderbook
         except Exception as e:
             print(f"Error fetching orderbook: {e}")
@@ -296,6 +355,79 @@ class WeatherTradingBot:
     def get_weather_data(self) -> Dict:
         """Fetch current Miami weather data."""
         return self.weather.get_miami_data()
+
+    def get_event_markets(self) -> List[Dict]:
+        """Fetch markets for the configured event ticker."""
+        if not self.event_ticker:
+            return []
+        try:
+            markets_resp = self.kalshi.get_markets(
+                event_ticker=self.event_ticker,
+                status="open",
+                limit=self.event_market_limit,
+            )
+            markets = markets_resp.get("markets") or markets_resp.get("data") or []
+            return [m for m in markets if isinstance(m, dict)]
+        except Exception as e:
+            print(f"Warning: failed to fetch event markets: {e}")
+            return []
+
+    def get_event_orderbooks(self, event_markets: List[Dict]) -> List[Dict]:
+        """Fetch orderbooks for markets in the event."""
+        orderbooks = []
+        for market in event_markets[: self.event_orderbook_limit]:
+            market_ticker = market.get("ticker")
+            if not market_ticker:
+                continue
+            try:
+                ob = self.kalshi.get_market_orderbook(market_ticker, depth=self.orderbook_depth)
+                book = ob.get("orderbook") if isinstance(ob, dict) else {}
+                yes_bids = (book.get("yes") or []) if isinstance(book, dict) else []
+                no_bids = (book.get("no") or []) if isinstance(book, dict) else []
+                orderbooks.append(
+                    {
+                        "ticker": market_ticker,
+                        "yes": self._normalize_bids(yes_bids, depth=self.orderbook_depth),
+                        "no": self._normalize_bids(no_bids, depth=self.orderbook_depth),
+                    }
+                )
+            except Exception as e:
+                print(f"Warning: failed to fetch orderbook for {market_ticker}: {e}")
+        return orderbooks
+
+    def get_event_markets_cached(self) -> List[Dict]:
+        now = time.time()
+        if self._cached_event_markets and now - self._last_event_markets_ts < self.event_markets_interval:
+            return self._cached_event_markets
+        self._cached_event_markets = self.get_event_markets()
+        self._last_event_markets_ts = now
+        return self._cached_event_markets
+
+    def get_event_orderbooks_cached(self, event_markets: List[Dict]) -> List[Dict]:
+        now = time.time()
+        if self._cached_event_orderbooks and now - self._last_event_orderbooks_ts < self.event_orderbook_interval:
+            return self._cached_event_orderbooks
+        self._cached_event_orderbooks = self.get_event_orderbooks(event_markets)
+        self._last_event_orderbooks_ts = now
+        return self._cached_event_orderbooks
+
+    def get_open_meteo_cached(self) -> Dict:
+        if not self.open_meteo_enabled:
+            return {}
+        now = time.time()
+        if self._cached_open_meteo and now - self._last_open_meteo_ts < self.open_meteo_interval:
+            return self._cached_open_meteo
+        gfs_high, ecmwf_high = self._open_meteo.get_daily_highs(
+            lat=self.open_meteo_lat, lon=self.open_meteo_lon
+        )
+        self._cached_open_meteo = {
+            "gfs_high": gfs_high,
+            "ecmwf_high": ecmwf_high,
+        }
+        if gfs_high is not None and ecmwf_high is not None:
+            self._cached_open_meteo["spread"] = abs(gfs_high - ecmwf_high)
+        self._last_open_meteo_ts = now
+        return self._cached_open_meteo
     
     def analyze_opportunity(
         self,
@@ -441,7 +573,14 @@ class WeatherTradingBot:
         
         return analysis
     
-    def print_status(self, weather_data: Dict, market_data: Dict, orderbook: Dict) -> None:
+    def print_status(
+        self,
+        weather_data: Dict,
+        market_data: Dict,
+        orderbook: Dict,
+        event_markets: Optional[list] = None,
+        event_orderbooks: Optional[list] = None,
+    ) -> None:
         """Print current status of weather and market."""
         print("\n" + "="*60)
         print(f"Status Update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -504,6 +643,30 @@ class WeatherTradingBot:
         else:
             print("No order book data available")
         
+        # Event markets summary
+        if event_markets:
+            print(f"\n--- Event Markets ({len(event_markets)}) ---")
+            book_by_ticker = {}
+            for ob in event_orderbooks or []:
+                if isinstance(ob, dict) and ob.get("ticker"):
+                    book_by_ticker[ob["ticker"]] = ob
+            for market in event_markets:
+                if not isinstance(market, dict):
+                    continue
+                ticker = market.get("ticker", "N/A")
+                title = market.get("title", "N/A")
+                status = market.get("status", "N/A")
+                last_price = market.get("last_price", "N/A")
+                print(f"{ticker} | {status} | {last_price}¢ | {title}")
+                ob = book_by_ticker.get(ticker)
+                if ob:
+                    yes = ob.get("yes") or []
+                    no = ob.get("no") or []
+                    if yes:
+                        print(f"  YES top: {yes[0].get('price')}¢ x {yes[0].get('count')}")
+                    if no:
+                        print(f"  NO top: {no[0].get('price')}¢ x {no[0].get('count')}")
+
         print("="*60 + "\n")
     
     def run_heartbeat(self, interval: int = 60) -> None:
@@ -520,17 +683,51 @@ class WeatherTradingBot:
         
         try:
             while True:
+                # Check exchange status first; skip if down
+                try:
+                    exchange = self.kalshi.get_exchange_status()
+                    if exchange.get("exchange_active") is False or exchange.get("trading_active") is False:
+                        print("\n⚠ Exchange is down or trading paused; skipping this cycle.")
+                        time.sleep(interval)
+                        continue
+                except Exception as e:
+                    print(f"\n⚠ Could not fetch exchange status: {e}")
+
                 # Fetch all data
                 weather_data = self.get_weather_data()
-                market_data = self.get_market_data()
-                orderbook = self.get_orderbook()
+                open_meteo = self.get_open_meteo_cached()
+                event_markets = self.get_event_markets_cached()
+                event_orderbooks = self.get_event_orderbooks_cached(event_markets)
                 ticker = self.resolve_market_ticker()
+                market_data = self.get_market_data(ticker=ticker)
+                orderbook = self.get_orderbook(ticker=ticker, depth=self.orderbook_depth)
+                portfolio = {}
+                positions = {}
+                try:
+                    portfolio = self.kalshi.get_balance()
+                except Exception as e:
+                    print(f"Warning: failed to fetch balance: {e}")
+                try:
+                    positions = self.kalshi.get_positions()
+                except Exception as e:
+                    print(f"Warning: failed to fetch positions: {e}")
+                orders = {}
+                try:
+                    orders = self.kalshi.get_orders(status="executed")
+                except Exception as e:
+                    print(f"Warning: failed to fetch orders: {e}")
                 current_exposure = 0
                 if ticker:
                     current_exposure = self.get_position_exposure(ticker)
                 
                 # Display status
-                self.print_status(weather_data, market_data, orderbook)
+                self.print_status(
+                    weather_data,
+                    market_data,
+                    orderbook,
+                    event_markets=event_markets,
+                    event_orderbooks=event_orderbooks,
+                )
                 
                 # Analyze for opportunities
                 analysis = self.analyze_opportunity(
@@ -562,6 +759,53 @@ class WeatherTradingBot:
                             print(f"✓ Order placed: {response}")
                         except Exception as e:
                             print(f"✗ Order failed: {e}")
+
+                # Persist snapshot for frontend
+                try:
+                    snapshot_file = os.getenv("BOT_SNAPSHOT_FILE", "snapshot.json")
+                    market_info = market_data.get("market") if isinstance(market_data, dict) else {}
+                    book = orderbook.get("orderbook") if isinstance(orderbook, dict) else {}
+                    yes_bids = (book.get("yes") or []) if isinstance(book, dict) else []
+                    no_bids = (book.get("no") or []) if isinstance(book, dict) else []
+
+                    snapshot = {
+                        "timestamp": datetime.now().isoformat(),
+                        "ticker": market_info.get("ticker"),
+                        "title": market_info.get("title"),
+                        "status": market_info.get("status"),
+                        "last_price": market_info.get("last_price"),
+                        "weather": {
+                            "current_temp": weather_data.get("current_temp") if isinstance(weather_data, dict) else None,
+                            "high_today": weather_data.get("high_today") if isinstance(weather_data, dict) else None,
+                        },
+                        "open_meteo": open_meteo,
+                        "portfolio": portfolio,
+                        "positions": positions,
+                        "orders": orders,
+                        "orders_note": self.orders_note,
+                        "event_ticker": self.event_ticker,
+                        "event_markets": [
+                            {
+                                "ticker": m.get("ticker"),
+                                "title": m.get("title"),
+                                "status": m.get("status"),
+                                "last_price": m.get("last_price"),
+                            }
+                            for m in event_markets
+                            if isinstance(m, dict)
+                        ],
+                        "event_orderbooks": event_orderbooks,
+                        "orderbook": {
+                            "yes": self._normalize_bids(yes_bids, depth=self.orderbook_depth),
+                            "no": self._normalize_bids(no_bids, depth=self.orderbook_depth),
+                        },
+                    }
+                    tmp_file = f"{snapshot_file}.tmp"
+                    with open(tmp_file, "w") as f:
+                        json.dump(snapshot, f)
+                    os.replace(tmp_file, snapshot_file)
+                except Exception as e:
+                    print(f"Warning: failed to write snapshot: {e}")
                 
                 # Wait before next update
                 time.sleep(interval)
@@ -574,6 +818,19 @@ class WeatherTradingBot:
 
 def main():
     """Main entry point."""
+    class _Tee:
+        def __init__(self, *streams):
+            self._streams = streams
+
+        def write(self, data):
+            for stream in self._streams:
+                stream.write(data)
+                stream.flush()
+
+        def flush(self):
+            for stream in self._streams:
+                stream.flush()
+
     def _get_env_int(name: str, default: int) -> int:
         value = os.getenv(name, "").strip()
         if not value:
@@ -600,6 +857,14 @@ def main():
             return default
         return value in {"1", "true", "yes", "y", "on"}
 
+    log_file = os.getenv("BOT_LOG_FILE", "bot.log")
+    try:
+        log_handle = open(log_file, "a", buffering=1)
+        sys.stdout = _Tee(sys.stdout, log_handle)
+        sys.stderr = _Tee(sys.stderr, log_handle)
+    except Exception as e:
+        print(f"Warning: could not open log file {log_file}: {e}")
+
     # Load API credentials
     api_key_file = Path("kalshi_public.txt")
     private_key_file = Path("kalshi_private.pem")
@@ -622,32 +887,54 @@ def main():
     base_url = os.getenv("KALSHI_BASE_URL", "https://api.elections.kalshi.com")
     interval = _get_env_int("BOT_INTERVAL", 60)
     series_ticker = os.getenv("KALSHI_SERIES_TICKER", "KXHIGHMIA")
+    event_ticker = os.getenv("KALSHI_EVENT_TICKER")
     market_ticker_override = os.getenv("KALSHI_MARKET_TICKER")
     request_timeout = _get_env_int("KALSHI_TIMEOUT", 15)
     max_retries = _get_env_int("KALSHI_MAX_RETRIES", 3)
     backoff_factor = _get_env_float("KALSHI_BACKOFF_FACTOR", 0.5)
     weather_timeout = _get_env_int("WEATHER_TIMEOUT", 10)
+    orderbook_depth = _get_env_int("ORDERBOOK_DEPTH", 10)
+    event_market_limit = _get_env_int("EVENT_MARKET_LIMIT", 200)
+    event_orderbook_limit = _get_env_int("EVENT_ORDERBOOK_LIMIT", 50)
+    event_markets_interval = _get_env_int("EVENT_MARKETS_INTERVAL", 300)
+    event_orderbook_interval = _get_env_int("EVENT_ORDERBOOK_INTERVAL", 120)
+    open_meteo_enabled = _get_env_bool("OPEN_METEO_ENABLED", True)
+    open_meteo_lat = float(os.getenv("OPEN_METEO_LAT", "25.78805"))
+    open_meteo_lon = float(os.getenv("OPEN_METEO_LON", "-80.31694"))
+    open_meteo_interval = _get_env_int("OPEN_METEO_INTERVAL", 900)
     max_order_size = _get_env_int("MAX_ORDER_SIZE", 5)
     max_position = _get_env_int("MAX_POSITION", 20)
     min_edge_cents = _get_env_int("MIN_EDGE_CENTS", 2)
     fee_cents = _get_env_float("FEE_CENTS", 0.0)
     trade_enabled = _get_env_bool("TRADE_ENABLED", False)
+    orders_note = os.getenv("ORDERS_NOTE")
 
     bot = WeatherTradingBot(
         api_key_id=api_key_id,
         private_key_path=str(private_key_file),
         base_url=base_url,
         series_ticker=series_ticker,
+        event_ticker=event_ticker,
         market_ticker_override=market_ticker_override,
         request_timeout=request_timeout,
         max_retries=max_retries,
         backoff_factor=backoff_factor,
         weather_timeout=weather_timeout,
+        orderbook_depth=orderbook_depth,
+        event_market_limit=event_market_limit,
+        event_orderbook_limit=event_orderbook_limit,
+        event_markets_interval=event_markets_interval,
+        event_orderbook_interval=event_orderbook_interval,
+        open_meteo_enabled=open_meteo_enabled,
+        open_meteo_lat=open_meteo_lat,
+        open_meteo_lon=open_meteo_lon,
+        open_meteo_interval=open_meteo_interval,
         max_order_size=max_order_size,
         max_position=max_position,
         min_edge_cents=min_edge_cents,
         fee_cents=fee_cents,
         trade_enabled=trade_enabled,
+        orders_note=orders_note,
     )
 
     # Test connection
