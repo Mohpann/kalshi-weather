@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kalshi Weather Boy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div class="hero__badge">LIVE MARKET SNAPSHOT</div>
+        <h1>Kalshi Weather Boy</h1>
+        <p class="hero__sub">
+          A focused, minimal dashboard for Miami temperature markets. Keep it
+          dark, fast, and high-signal.
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="https://kalshi.com/markets/kxhighmia" target="_blank" rel="noreferrer">
+            Open Kalshi Market
+          </a>
+          <button class="btn btn--ghost" type="button">
+            Refresh Snapshot
+          </button>
+        </div>
+      </header>
+
+      <section class="grid">
+        <article class="card">
+          <div class="card__title">Market</div>
+          <div class="card__value">KXHIGHMIA</div>
+          <div class="card__meta">Miami daily high temperature</div>
+        </article>
+        <article class="card">
+          <div class="card__title">Status</div>
+          <div class="card__value">Active</div>
+          <div class="card__meta">Exchange: live trading</div>
+        </article>
+        <article class="card">
+          <div class="card__title">Last Price</div>
+          <div class="card__value">99¢</div>
+          <div class="card__meta">Top of book indicator</div>
+        </article>
+        <article class="card">
+          <div class="card__title">Weather</div>
+          <div class="card__value">—</div>
+          <div class="card__meta">Manual input fallback</div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>Execution Guardrails</h2>
+          <span class="panel__pill">Read‑only</span>
+        </div>
+        <div class="panel__body">
+          <div class="panel__row">
+            <span>Max order size</span>
+            <strong>5 contracts</strong>
+          </div>
+          <div class="panel__row">
+            <span>Max position</span>
+            <strong>20 contracts</strong>
+          </div>
+          <div class="panel__row">
+            <span>Min edge</span>
+            <strong>2¢</strong>
+          </div>
+          <div class="panel__row">
+            <span>Fee estimate</span>
+            <strong>0.0¢</strong>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Local dashboard · no trades executed</span>
+        <span class="footer__mono">v2.0</span>
+      </footer>
+    </main>
+  </body>
+</html>
