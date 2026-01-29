@@ -721,6 +721,10 @@ class WeatherTradingBot:
                         "weather": {
                             "current_temp": weather_data.get("current_temp") if isinstance(weather_data, dict) else None,
                             "high_today": weather_data.get("high_today") if isinstance(weather_data, dict) else None,
+                            "forecast_high": weather_data.get("forecast_high") if isinstance(weather_data, dict) else None,
+                            "forecast_period": weather_data.get("forecast_period") if isinstance(weather_data, dict) else None,
+                            "forecast_updated": weather_data.get("forecast_updated") if isinstance(weather_data, dict) else None,
+                            "forecast_source": weather_data.get("forecast_source") if isinstance(weather_data, dict) else None,
                         },
                         "open_meteo": open_meteo,
                         "portfolio": portfolio,

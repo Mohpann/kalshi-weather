@@ -55,3 +55,52 @@ class NWSClient:
         data["low_today"] = self._c_to_f(min_24)
 
         return data
+
+    def get_forecast_high(self, lat: float, lon: float) -> Dict:
+        """Return today's forecast high from the NWS point forecast."""
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept": "application/geo+json",
+        }
+        points_url = f"{self.base_url}/points/{lat},{lon}"
+        points_resp = requests.get(points_url, headers=headers, timeout=self.timeout)
+        points_resp.raise_for_status()
+        forecast_url = (points_resp.json().get("properties") or {}).get("forecast")
+        if not forecast_url:
+            return {}
+
+        forecast_resp = requests.get(forecast_url, headers=headers, timeout=self.timeout)
+        forecast_resp.raise_for_status()
+        periods = (forecast_resp.json().get("properties") or {}).get("periods") or []
+        if not periods:
+            return {}
+
+        today_date = datetime.now().date()
+        chosen = None
+        for period in periods:
+            if not isinstance(period, dict):
+                continue
+            start = period.get("startTime")
+            is_day = period.get("isDaytime")
+            if not start or is_day is not True:
+                continue
+            try:
+                start_date = datetime.fromisoformat(start.replace("Z", "+00:00")).date()
+            except ValueError:
+                continue
+            if start_date == today_date:
+                chosen = period
+                break
+
+        if not chosen:
+            chosen = periods[0] if isinstance(periods[0], dict) else None
+        if not chosen:
+            return {}
+
+        temp = chosen.get("temperature")
+        return {
+            "forecast_high": temp if isinstance(temp, (int, float)) else None,
+            "forecast_period": chosen.get("name"),
+            "forecast_updated": chosen.get("startTime"),
+            "forecast_source": "nws_forecast",
+        }

@@ -41,6 +41,8 @@ class WeatherScraper:
         self.nws_user_agent = os.getenv(
             "NWS_USER_AGENT", "kalshi-weather-bot (contact: example@example.com)"
         )
+        self.nws_lat = float(os.getenv("NWS_LAT", "25.78805"))
+        self.nws_lon = float(os.getenv("NWS_LON", "-80.31694"))
         self.meteosource_key = os.getenv("METEOSOURCE_API_KEY")
         self.meteosource_tier = os.getenv("METEOSOURCE_TIER", "free").strip().lower()
         self.meteosource_base_url = os.getenv("METEOSOURCE_BASE_URL")
@@ -63,6 +65,9 @@ class WeatherScraper:
         try:
             client = NWSClient(user_agent=self.nws_user_agent, timeout=self.timeout)
             data = client.get_latest_observation(self.nws_station_id)
+            forecast = client.get_forecast_high(self.nws_lat, self.nws_lon)
+            if forecast:
+                data.update(forecast)
             if data.get("current_temp") is not None:
                 print("✓ Loaded NWS station data")
                 return data
