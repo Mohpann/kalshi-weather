@@ -67,11 +67,10 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Edit `main.py` line 205 to choose environment:
-```python
-base_url = "https://api.elections.kalshi.com"  # Production (real money)
-# OR
-base_url = "https://demo-api.kalshi.co"  # Demo/testing
+Set the environment in `.env` (recommended):
+```bash
+KALSHI_BASE_URL=https://api.elections.kalshi.com   # Production (real money)
+# KALSHI_BASE_URL=https://demo-api.kalshi.co       # Demo/testing
 ```
 
 ## Usage

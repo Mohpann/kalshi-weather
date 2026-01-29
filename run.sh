@@ -57,6 +57,9 @@ export OPEN_METEO_ENABLED=${OPEN_METEO_ENABLED:-true}
 export OPEN_METEO_LAT=${OPEN_METEO_LAT:-25.78805}
 export OPEN_METEO_LON=${OPEN_METEO_LON:--80.31694}
 
+# Default to production unless explicitly overridden
+export KALSHI_BASE_URL=${KALSHI_BASE_URL:-https://api.elections.kalshi.com}
+
 # Optional: Event ticker (example: KXHIGHMIA-26JAN27)
 if [ -z "$KALSHI_EVENT_TICKER" ]; then
     echo ""

@@ -64,7 +64,7 @@ kalshi-weather-boy-v2/
 ## Important Constants
 
 **Base URLs**:
-- Production: `https://api.kalshi.com` (real money!)
+- Production: `https://api.elections.kalshi.com` (real money!)
 - Demo: `https://demo-api.kalshi.co` (testing)
 
 **Market Ticker**: `KXHIGHMIA-{DD}{MMM}{YY}`
@@ -102,7 +102,7 @@ python3 test_setup.py
 
 # Test Kalshi connection
 python3 -c "from kalshi_client import KalshiClient; \
-c = KalshiClient('$(cat kalshi_public.txt)', 'kalshi_private.pem', 'https://demo-api.kalshi.co'); \
+c = KalshiClient('$(cat kalshi_public.txt)', 'kalshi_private.pem', 'https://api.elections.kalshi.com'); \
 print(c.get_balance())"
 
 ```

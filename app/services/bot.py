@@ -152,9 +152,9 @@ class WeatherTradingBot:
         ticker = f"KXHIGHMIA-{date_str}"
         return ticker
 
-    def resolve_market_ticker(self) -> Optional[str]:
+    def resolve_market_ticker(self, ignore_override: bool = False) -> Optional[str]:
         """Resolve a valid market ticker using override, then series lookup."""
-        if self.market_ticker_override:
+        if self.market_ticker_override and not ignore_override:
             return self.market_ticker_override
 
         ticker = self.get_todays_market_ticker()
@@ -261,15 +261,26 @@ class WeatherTradingBot:
     
     def get_market_data(self, ticker: Optional[str] = None) -> Dict:
         """Fetch current market data for Miami temperature."""
+        def _fetch(target: str) -> Dict:
+            print(f"Fetching market data for: {target}")
+            return self.kalshi.get_market(target)
+
         try:
             ticker = ticker or self.resolve_market_ticker()
             if not ticker:
                 return {}
-            print(f"Fetching market data for: {ticker}")
-            
-            market = self.kalshi.get_market(ticker)
-            return market
+            return _fetch(ticker)
         except Exception as e:
+            message = str(e)
+            if "404" in message:
+                fallback = self.resolve_market_ticker(ignore_override=True)
+                if fallback and fallback != ticker:
+                    try:
+                        print(f"Warning: {ticker} not found; retrying with {fallback}")
+                        return _fetch(fallback)
+                    except Exception as retry_error:
+                        print(f"Error fetching market data: {retry_error}")
+                        return {}
             print(f"Error fetching market data: {e}")
             return {}
     
@@ -405,7 +416,7 @@ class WeatherTradingBot:
         book = orderbook.get('orderbook', {}) if orderbook else {}
         yes_bids = book.get('yes', []) or []
         no_bids = book.get('no', []) or []
-        market_info = market_data.get('market', {}) if market_data else {}
+        market_info = (market_data.get('market') or {}) if isinstance(market_data, dict) else {}
         title = market_info.get('title')
         if title:
             analysis['reasoning'].append(f"Market title: {title}")
@@ -532,7 +543,7 @@ class WeatherTradingBot:
         # Market info
         print("\n--- Kalshi Market Data ---")
         if market_data:
-            market_info = market_data.get('market', {})
+            market_info = (market_data.get('market') or {}) if isinstance(market_data, dict) else {}
             print(f"Ticker: {market_info.get('ticker', 'N/A')}")
             print(f"Title: {market_info.get('title', 'N/A')}")
             print(f"Status: {market_info.get('status', 'N/A')}")
@@ -696,7 +707,7 @@ class WeatherTradingBot:
                 # Persist snapshot for frontend
                 try:
                     snapshot_file = os.getenv("BOT_SNAPSHOT_FILE", "snapshot.json")
-                    market_info = market_data.get("market") if isinstance(market_data, dict) else {}
+                    market_info = (market_data.get("market") or {}) if isinstance(market_data, dict) else {}
                     book = orderbook.get("orderbook") if isinstance(orderbook, dict) else {}
                     yes_bids = (book.get("yes") or []) if isinstance(book, dict) else []
                     no_bids = (book.get("no") or []) if isinstance(book, dict) else []

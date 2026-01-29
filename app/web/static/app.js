@@ -463,10 +463,41 @@ async function loadSnapshot() {
   }
 }
 
+async function requestSnapshot() {
+  const btn = document.querySelector('[data-action="snapshot"]');
+  const original = btn ? btn.textContent : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Taking snapshot...';
+  }
+  try {
+    const response = await fetch('/api/snapshot/refresh', { method: 'POST' });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    await loadSnapshot();
+  } catch (err) {
+    console.error(err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const refreshBtn = document.querySelector('[data-action="refresh"]');
   if (refreshBtn) {
     refreshBtn.addEventListener('click', loadSnapshot);
+  }
+  const snapshotBtn = document.querySelector('[data-action="snapshot"]');
+  if (snapshotBtn) {
+    snapshotBtn.addEventListener('click', requestSnapshot);
   }
   loadSnapshot();
   setInterval(loadSnapshot, 15000);
