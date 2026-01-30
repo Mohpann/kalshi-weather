@@ -13,6 +13,11 @@ sock = Sock(app)
 
 load_dotenv()
 
+_SNAPSHOT_CACHE = {
+    "ts": 0.0,
+    "data": None,
+}
+
 def _get_env_int(name: str, default: int) -> int:
     value = os.getenv(name, "").strip()
     if not value:
@@ -58,10 +63,12 @@ def _init_bot():
         event_orderbook_limit=_get_env_int("EVENT_ORDERBOOK_LIMIT", 50),
         event_markets_interval=_get_env_int("EVENT_MARKETS_INTERVAL", 300),
         event_orderbook_interval=_get_env_int("EVENT_ORDERBOOK_INTERVAL", 120),
+        event_orderbook_workers=_get_env_int("EVENT_ORDERBOOK_WORKERS", 8),
         open_meteo_enabled=os.getenv("OPEN_METEO_ENABLED", "true").lower() in {"1", "true", "yes", "y", "on"},
         open_meteo_lat=float(os.getenv("OPEN_METEO_LAT", "25.78805")),
         open_meteo_lon=float(os.getenv("OPEN_METEO_LON", "-80.31694")),
         open_meteo_interval=_get_env_int("OPEN_METEO_INTERVAL", 900),
+        open_meteo_workers=_get_env_int("OPEN_METEO_WORKERS", 2),
         max_order_size=_get_env_int("MAX_ORDER_SIZE", 5),
         max_position=_get_env_int("MAX_POSITION", 20),
         min_edge_cents=_get_env_int("MIN_EDGE_CENTS", 2),
@@ -155,67 +162,21 @@ def snapshot():
     snapshot_file = os.getenv("BOT_SNAPSHOT_FILE", "snapshot.json")
     if os.path.exists(snapshot_file):
         try:
+            ttl = _get_env_float("SNAPSHOT_CACHE_TTL", 2.0)
+            now = time.time()
+            cached = _SNAPSHOT_CACHE["data"]
+            if cached is not None and now - _SNAPSHOT_CACHE["ts"] < ttl:
+                return app.response_class(cached, mimetype="application/json")
             with open(snapshot_file, "r") as f:
                 data = f.read()
+            _SNAPSHOT_CACHE["data"] = data
+            _SNAPSHOT_CACHE["ts"] = now
             return app.response_class(data, mimetype="application/json")
         except Exception as e:
             return jsonify({"error": f"Snapshot read failed: {e}"}), 500
-
-    try:
-        bot, error = _init_bot()
-        if error:
-            return jsonify({"error": error}), 400
-
-        exchange = bot.kalshi.get_exchange_status()
-        exchange_active = exchange.get("exchange_active")
-        trading_active = exchange.get("trading_active")
-
-        ticker = bot.resolve_market_ticker()
-        weather = bot.get_weather_data()
-        market_data = bot.get_market_data() if ticker else {}
-        market_info = market_data.get("market") if isinstance(market_data, dict) else {}
-
-        event_ticker = os.getenv("KALSHI_EVENT_TICKER")
-        event_markets = []
-        if event_ticker:
-            try:
-                markets_resp = bot.kalshi.get_markets(event_ticker=event_ticker, status="open", limit=200)
-                markets = markets_resp.get("markets") or markets_resp.get("data") or []
-                event_markets = [
-                    {
-                        "ticker": m.get("ticker"),
-                        "title": m.get("title"),
-                        "status": m.get("status"),
-                        "last_price": m.get("last_price"),
-                    }
-                    for m in markets
-                    if isinstance(m, dict)
-                ]
-            except Exception as e:
-                event_markets = [{"ticker": None, "title": f"Error: {e}", "status": None, "last_price": None}]
-
-        return jsonify(
-            {
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "exchange": {
-                    "exchange_active": exchange_active,
-                    "trading_active": trading_active,
-                },
-                "market": {
-                    "ticker": market_info.get("ticker"),
-                    "title": market_info.get("title"),
-                    "status": market_info.get("status"),
-                    "last_price": market_info.get("last_price"),
-                },
-                "event_ticker": event_ticker,
-                "event_markets": event_markets,
-                "event_orderbooks": [],
-                "open_meteo": {},
-                "weather": weather,
-            }
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    _SNAPSHOT_CACHE["data"] = None
+    _SNAPSHOT_CACHE["ts"] = 0.0
+    return jsonify({"error": "Snapshot missing. Use /api/snapshot/refresh to generate one."}), 404
 
 
 @app.post("/api/snapshot/refresh")

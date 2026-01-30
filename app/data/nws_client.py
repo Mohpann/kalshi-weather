@@ -3,6 +3,7 @@ NWS API client for station observations.
 """
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Dict, Optional
 
 import requests
@@ -75,8 +76,12 @@ class NWSClient:
         if not periods:
             return {}
 
-        today_date = datetime.now().date()
+        local_tz = ZoneInfo("America/New_York")
+        now_local = datetime.now(local_tz)
+        today_date = now_local.date()
         chosen = None
+        max_temp = None
+        next_daytime = None
         for period in periods:
             if not isinstance(period, dict):
                 continue
@@ -85,15 +90,28 @@ class NWSClient:
             if not start or is_day is not True:
                 continue
             try:
-                start_date = datetime.fromisoformat(start.replace("Z", "+00:00")).date()
+                start_dt = datetime.fromisoformat(start.replace("Z", "+00:00")).astimezone(local_tz)
+                start_date = start_dt.date()
             except ValueError:
                 continue
             if start_date == today_date:
-                chosen = period
-                break
+                temp = period.get("temperature")
+                if isinstance(temp, (int, float)) and (max_temp is None or temp > max_temp):
+                    max_temp = temp
+                    chosen = period
+                continue
+            if start_dt >= now_local and next_daytime is None:
+                next_daytime = period
 
         if not chosen:
-            chosen = periods[0] if isinstance(periods[0], dict) else None
+            chosen = next_daytime
+        if not chosen:
+            for period in periods:
+                if isinstance(period, dict) and period.get("isDaytime") is True:
+                    chosen = period
+                    break
+        if not chosen:
+            return {}
         if not chosen:
             return {}
 

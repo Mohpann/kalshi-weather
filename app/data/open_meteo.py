@@ -4,6 +4,7 @@ Open-Meteo client for simple forecast cross-checks.
 
 from datetime import datetime
 from typing import Dict, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
@@ -11,8 +12,9 @@ import requests
 class OpenMeteoClient:
     """Fetch hourly temperature forecasts from Open-Meteo models."""
 
-    def __init__(self, timeout: int = 10):
+    def __init__(self, timeout: int = 10, max_workers: int = 2):
         self.timeout = timeout
+        self.max_workers = max_workers
 
     def _fetch_hourly(self, model: str, lat: float, lon: float, days: int = 2) -> Optional[Dict]:
         url = f"https://api.open-meteo.com/v1/{model}"
@@ -59,8 +61,11 @@ class OpenMeteoClient:
         """Return (gfs_high, ecmwf_high) for target_date."""
         if target_date is None:
             target_date = datetime.now().date()
-        gfs = self._fetch_hourly("gfs", lat, lon)
-        ecmwf = self._fetch_hourly("ecmwf", lat, lon)
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            gfs_future = executor.submit(self._fetch_hourly, "gfs", lat, lon)
+            ecmwf_future = executor.submit(self._fetch_hourly, "ecmwf", lat, lon)
+            gfs = gfs_future.result()
+            ecmwf = ecmwf_future.result()
         gfs_high = self._daily_high_from_hourly(gfs.get("hourly", {}) if gfs else {}, target_date)
         ecmwf_high = self._daily_high_from_hourly(ecmwf.get("hourly", {}) if ecmwf else {}, target_date)
         return gfs_high, ecmwf_high

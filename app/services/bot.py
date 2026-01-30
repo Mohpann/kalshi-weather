@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 
@@ -48,10 +49,12 @@ class WeatherTradingBot:
         event_orderbook_limit: int = 50,
         event_markets_interval: int = 300,
         event_orderbook_interval: int = 120,
+        event_orderbook_workers: int = 8,
         open_meteo_enabled: bool = True,
         open_meteo_lat: float = 25.78805,
         open_meteo_lon: float = -80.31694,
         open_meteo_interval: int = 900,
+        open_meteo_workers: int = 2,
         max_order_size: int = 5,
         max_position: int = 20,
         min_edge_cents: int = 2,
@@ -78,6 +81,7 @@ class WeatherTradingBot:
             event_orderbook_limit: Max markets to fetch orderbooks for per cycle
             event_markets_interval: Seconds between event market refreshes
             event_orderbook_interval: Seconds between event orderbook refreshes
+            event_orderbook_workers: Max parallel orderbook fetches
             open_meteo_enabled: Whether to pull Open-Meteo forecasts
             open_meteo_lat: Latitude for forecasts
             open_meteo_lon: Longitude for forecasts
@@ -107,6 +111,7 @@ class WeatherTradingBot:
         self.event_orderbook_limit = event_orderbook_limit
         self.event_markets_interval = event_markets_interval
         self.event_orderbook_interval = event_orderbook_interval
+        self.event_orderbook_workers = event_orderbook_workers
         self._last_event_markets_ts = 0.0
         self._last_event_orderbooks_ts = 0.0
         self._cached_event_markets = []
@@ -117,7 +122,7 @@ class WeatherTradingBot:
         self.open_meteo_interval = open_meteo_interval
         self._last_open_meteo_ts = 0.0
         self._cached_open_meteo = {}
-        self._open_meteo = OpenMeteoClient(timeout=request_timeout)
+        self._open_meteo = OpenMeteoClient(timeout=request_timeout, max_workers=open_meteo_workers)
         self.max_order_size = max_order_size
         self.max_position = max_position
         self.min_edge_cents = min_edge_cents
@@ -319,24 +324,32 @@ class WeatherTradingBot:
     def get_event_orderbooks(self, event_markets: List[Dict]) -> List[Dict]:
         """Fetch orderbooks for markets in the event."""
         orderbooks = []
-        for market in event_markets[: self.event_orderbook_limit]:
-            market_ticker = market.get("ticker")
-            if not market_ticker:
-                continue
-            try:
-                ob = self.kalshi.get_market_orderbook(market_ticker, depth=self.orderbook_depth)
-                book = ob.get("orderbook") if isinstance(ob, dict) else {}
-                yes_bids = (book.get("yes") or []) if isinstance(book, dict) else []
-                no_bids = (book.get("no") or []) if isinstance(book, dict) else []
-                orderbooks.append(
-                    {
-                        "ticker": market_ticker,
-                        "yes": self._normalize_bids(yes_bids, depth=self.orderbook_depth),
-                        "no": self._normalize_bids(no_bids, depth=self.orderbook_depth),
-                    }
-                )
-            except Exception as e:
-                print(f"Warning: failed to fetch orderbook for {market_ticker}: {e}")
+        targets = [m.get("ticker") for m in event_markets[: self.event_orderbook_limit] if m.get("ticker")]
+        if not targets:
+            return orderbooks
+
+        max_workers = min(self.event_orderbook_workers, len(targets))
+
+        def _fetch(ticker: str):
+            ob = self.kalshi.get_market_orderbook(ticker, depth=self.orderbook_depth)
+            book = ob.get("orderbook") if isinstance(ob, dict) else {}
+            yes_bids = (book.get("yes") or []) if isinstance(book, dict) else []
+            no_bids = (book.get("no") or []) if isinstance(book, dict) else []
+            return {
+                "ticker": ticker,
+                "yes": self._normalize_bids(yes_bids, depth=self.orderbook_depth),
+                "no": self._normalize_bids(no_bids, depth=self.orderbook_depth),
+            }
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {executor.submit(_fetch, ticker): ticker for ticker in targets}
+            for future in as_completed(future_map):
+                ticker = future_map[future]
+                try:
+                    orderbooks.append(future.result())
+                except Exception as e:
+                    print(f"Warning: failed to fetch orderbook for {ticker}: {e}")
+
         return orderbooks
 
     def get_event_markets_cached(self) -> List[Dict]:
@@ -849,10 +862,12 @@ def main():
     event_orderbook_limit = _get_env_int("EVENT_ORDERBOOK_LIMIT", 50)
     event_markets_interval = _get_env_int("EVENT_MARKETS_INTERVAL", 300)
     event_orderbook_interval = _get_env_int("EVENT_ORDERBOOK_INTERVAL", 120)
+    event_orderbook_workers = _get_env_int("EVENT_ORDERBOOK_WORKERS", 8)
     open_meteo_enabled = _get_env_bool("OPEN_METEO_ENABLED", True)
     open_meteo_lat = float(os.getenv("OPEN_METEO_LAT", "25.78805"))
     open_meteo_lon = float(os.getenv("OPEN_METEO_LON", "-80.31694"))
     open_meteo_interval = _get_env_int("OPEN_METEO_INTERVAL", 900)
+    open_meteo_workers = _get_env_int("OPEN_METEO_WORKERS", 2)
     max_order_size = _get_env_int("MAX_ORDER_SIZE", 5)
     max_position = _get_env_int("MAX_POSITION", 20)
     min_edge_cents = _get_env_int("MIN_EDGE_CENTS", 2)
@@ -876,10 +891,12 @@ def main():
         event_orderbook_limit=event_orderbook_limit,
         event_markets_interval=event_markets_interval,
         event_orderbook_interval=event_orderbook_interval,
+        event_orderbook_workers=event_orderbook_workers,
         open_meteo_enabled=open_meteo_enabled,
         open_meteo_lat=open_meteo_lat,
         open_meteo_lon=open_meteo_lon,
         open_meteo_interval=open_meteo_interval,
+        open_meteo_workers=open_meteo_workers,
         max_order_size=max_order_size,
         max_position=max_position,
         min_edge_cents=min_edge_cents,

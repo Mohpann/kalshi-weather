@@ -37,6 +37,9 @@ class WeatherScraper:
         self.session = requests.Session()
         self.last_request_time = 0
         self.min_request_delay = 2  # Seconds between requests
+        self.nws_cache_ttl = int(os.getenv("NWS_CACHE_TTL", "600"))
+        self._nws_cache_ts = 0.0
+        self._nws_cache_data = {}
         self.nws_station_id = os.getenv("NWS_STATION_ID", "KMIA")
         self.nws_user_agent = os.getenv(
             "NWS_USER_AGENT", "kalshi-weather-bot (contact: example@example.com)"
@@ -62,6 +65,9 @@ class WeatherScraper:
         return merged
 
     def _get_nws_data(self) -> Dict:
+        now = time.time()
+        if self._nws_cache_data and now - self._nws_cache_ts < self.nws_cache_ttl:
+            return dict(self._nws_cache_data)
         try:
             client = NWSClient(user_agent=self.nws_user_agent, timeout=self.timeout)
             data = client.get_latest_observation(self.nws_station_id)
@@ -70,6 +76,8 @@ class WeatherScraper:
                 data.update(forecast)
             if data.get("current_temp") is not None:
                 print("✓ Loaded NWS station data")
+                self._nws_cache_data = dict(data)
+                self._nws_cache_ts = now
                 return data
         except Exception as e:
             print(f"⚠ NWS fetch failed ({e})")

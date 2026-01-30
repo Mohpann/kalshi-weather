@@ -9,6 +9,8 @@ async function loadSnapshot() {
   const healthEl = document.querySelector('[data-field="health"]');
   const modelsEl = document.querySelector('[data-field="models"]');
   const forecastHighEl = document.querySelector('[data-field="forecast-high"]');
+  const forecastHighBigEl = document.querySelector('[data-field="forecast-high-big"]');
+  const forecastHighMetaEl = document.querySelector('[data-field="forecast-high-meta"]');
   const opportunitiesEl = document.querySelector('[data-field="opportunities"]');
   const portfolioEl = document.querySelector('[data-field="portfolio"]');
   const cashEl = document.querySelector('[data-field="cash"]');
@@ -110,6 +112,42 @@ async function loadSnapshot() {
         forecastHighEl.textContent = '—';
       }
     }
+    if (forecastHighBigEl) {
+      const forecastHigh = data.weather?.forecast_high;
+      forecastHighBigEl.textContent =
+        typeof forecastHigh === 'number' ? `${Math.round(forecastHigh)}°F` : '—';
+    }
+    if (forecastHighMetaEl) {
+      const source = data.weather?.forecast_source;
+      const period = data.weather?.forecast_period;
+      const updated = data.weather?.forecast_updated;
+      const sourceLabel = source === 'nws_forecast' ? 'NWS' : (source || 'Forecast');
+      let prefix = '';
+      if (updated) {
+        const updatedDate = new Date(updated);
+        if (!Number.isNaN(updatedDate.getTime())) {
+          const todayLocal = new Date();
+          const dayFormatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          });
+          const updatedDay = dayFormatter.format(updatedDate);
+          const todayDay = dayFormatter.format(todayLocal);
+          if (updatedDay !== todayDay) {
+            const labelFormatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/New_York',
+              month: 'short',
+              day: 'numeric',
+            });
+            prefix = `Next daytime high · ${labelFormatter.format(updatedDate)} · `;
+          }
+        }
+      }
+      const metaCore = period ? `${sourceLabel} · ${period}` : sourceLabel;
+      forecastHighMetaEl.textContent = `${prefix}${metaCore}`.trim();
+    }
     if (portfolioEl) {
       const portfolioValue = data.portfolio?.portfolio_value;
       const balance = data.portfolio?.balance;
@@ -132,6 +170,20 @@ async function loadSnapshot() {
     if (ordersNoteEl) {
       ordersNoteEl.textContent = data.orders_note || '—';
     }
+
+    const parseMarketTemperature = (market) => {
+      const title = market?.title;
+      const titleTemps = title?.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+      if (titleTemps.length) {
+        return Math.min(...titleTemps);
+      }
+      const ticker = market?.ticker ?? '';
+      const tickerMatch = ticker.match(/-[A-Z](-?\d+(?:\.\d+)?)/);
+      if (tickerMatch) {
+        return Number(tickerMatch[1]);
+      }
+      return null;
+    };
 
     if (opportunitiesEl) {
       opportunitiesEl.innerHTML = '';
@@ -356,13 +408,23 @@ async function loadSnapshot() {
           bookByTicker[book.ticker] = book;
         }
       });
-      if (!markets.length) {
+      const sortedMarkets = [...markets].sort((a, b) => {
+        const aTemp = parseMarketTemperature(a);
+        const bTemp = parseMarketTemperature(b);
+        if (aTemp == null && bTemp == null) return 0;
+        if (aTemp == null) return 1;
+        if (bTemp == null) return -1;
+        if (aTemp !== bTemp) return bTemp - aTemp;
+        return String(a?.ticker ?? '').localeCompare(String(b?.ticker ?? ''));
+      });
+
+      if (!sortedMarkets.length) {
         const empty = document.createElement('div');
         empty.className = 'event-markets__row';
         empty.textContent = 'No data';
         eventMarketsEl.appendChild(empty);
       } else {
-        markets.forEach((market) => {
+        sortedMarkets.forEach((market) => {
           const card = document.createElement('div');
           card.className = 'event-market';
 
@@ -437,6 +499,12 @@ async function loadSnapshot() {
     }
     if (forecastHighEl) {
       forecastHighEl.textContent = '—';
+    }
+    if (forecastHighBigEl) {
+      forecastHighBigEl.textContent = '—';
+    }
+    if (forecastHighMetaEl) {
+      forecastHighMetaEl.textContent = '—';
     }
     if (healthEl) {
       healthEl.textContent = 'source unknown · age —';
