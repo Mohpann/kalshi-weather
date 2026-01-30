@@ -17,7 +17,7 @@ Each bot cycle (default 60s) performs multiple network calls:
 These calls dominate cycle latency and are **I/O-bound**.
 
 ## CPU Hotspots
-- HTML parsing for wethr.net (fallback) via BeautifulSoup
+- NWS API + Meteosource weather sources
 - Small local transforms (parsing titles, computing heuristic probs)
 
 These are minor relative to network I/O.

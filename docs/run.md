@@ -15,6 +15,9 @@ Copy `.env.example` to `.env` and fill:
 Optional:
 - `KALSHI_EVENT_TICKER` to view event markets
 - `OPEN_METEO_*` for forecast checks
+- `NWS_LAT` / `NWS_LON` to pin the station location (KMIA coords)
+- `NWS_CACHE_TTL` to throttle NWS fetches (seconds)
+- `SNAPSHOT_CACHE_TTL` to throttle snapshot reads (seconds)
 
 ## Run (Bot + Dashboard)
 ```bash

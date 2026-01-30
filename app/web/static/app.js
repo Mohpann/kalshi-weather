@@ -9,19 +9,46 @@ async function loadSnapshot() {
   const healthEl = document.querySelector('[data-field="health"]');
   const modelsEl = document.querySelector('[data-field="models"]');
   const forecastHighEl = document.querySelector('[data-field="forecast-high"]');
+  const referenceHighEl = document.querySelector('[data-field="reference-high"]');
   const forecastHighBigEl = document.querySelector('[data-field="forecast-high-big"]');
   const forecastHighMetaEl = document.querySelector('[data-field="forecast-high-meta"]');
+  const referenceHighBigEl = document.querySelector('[data-field="reference-high-big"]');
+  const referenceHighMetaEl = document.querySelector('[data-field="reference-high-meta"]');
   const opportunitiesEl = document.querySelector('[data-field="opportunities"]');
   const portfolioEl = document.querySelector('[data-field="portfolio"]');
   const cashEl = document.querySelector('[data-field="cash"]');
   const ordersNoteEl = document.querySelector('[data-field="orders-note"]');
   const positionsEl = document.querySelector('[data-field="positions"]');
   const ordersEl = document.querySelector('[data-field="orders"]');
+  const tableNwsForecastHighEl = document.querySelector('[data-field="table-nws-forecast-high"]');
+  const tableNwsForecastNoteEl = document.querySelector('[data-field="table-nws-forecast-note"]');
+  const tableNwsObservedHighEl = document.querySelector('[data-field="table-nws-observed-high"]');
+  const tableNwsObservedNoteEl = document.querySelector('[data-field="table-nws-observed-note"]');
+  const tableGfsHighEl = document.querySelector('[data-field="table-openmeteo-gfs-high"]');
+  const tableGfsNoteEl = document.querySelector('[data-field="table-openmeteo-gfs-note"]');
+  const tableEcmwfHighEl = document.querySelector('[data-field="table-openmeteo-ecmwf-high"]');
+  const tableEcmwfNoteEl = document.querySelector('[data-field="table-openmeteo-ecmwf-note"]');
+  const tableBlendHighEl = document.querySelector('[data-field="table-openmeteo-blend-high"]');
+  const tableBlendNoteEl = document.querySelector('[data-field="table-openmeteo-blend-note"]');
+  const tableMeteosourceHighEl = document.querySelector('[data-field="table-meteosource-high"]');
+  const tableMeteosourceNoteEl = document.querySelector('[data-field="table-meteosource-note"]');
 
   try {
-    const response = await fetch('/api/snapshot');
+    let response = await fetch('/api/snapshot');
+    if (!response.ok && response.status === 404) {
+      response = await fetch('/api/snapshot/refresh', { method: 'POST' });
+    }
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      let detail = '';
+      try {
+        const errData = await response.json();
+        if (errData?.error) {
+          detail = ` (${errData.error})`;
+        }
+      } catch (_) {
+        // ignore parse errors
+      }
+      throw new Error(`HTTP ${response.status}${detail}`);
     }
     const data = await response.json();
 
@@ -32,12 +59,14 @@ async function loadSnapshot() {
     if (statusEl) {
       statusEl.textContent = data.market?.status ?? 'unknown';
     }
-    if (data.weather) {
-      const current = data.weather.current_temp != null ? `${data.weather.current_temp}°F` : '—';
-      const high = data.weather.high_today != null ? `${data.weather.high_today}°F` : '—';
-      weatherEl.textContent = `${current} / ${high}`;
-    } else {
-      weatherEl.textContent = '—';
+    if (weatherEl) {
+      if (data.weather) {
+        const current = data.weather.current_temp != null ? `${data.weather.current_temp}°F` : '—';
+        const high = data.weather.high_today != null ? `${data.weather.high_today}°F` : '—';
+        weatherEl.textContent = `${current} / ${high}`;
+      } else {
+        weatherEl.textContent = '—';
+      }
     }
     if (exchangeEl) {
       const ex = data.exchange ?? {};
@@ -46,10 +75,12 @@ async function loadSnapshot() {
       exchangeEl.textContent = `${exActive} · ${trActive}`;
     }
 
-    if (data.market?.title) {
-      subtitleEl.textContent = data.market.title;
-    } else if (data.event_ticker) {
-      subtitleEl.textContent = `Tracking ${data.event_ticker} markets`;
+    if (subtitleEl) {
+      if (data.market?.title) {
+        subtitleEl.textContent = data.market.title;
+      } else if (data.event_ticker) {
+        subtitleEl.textContent = `Tracking ${data.event_ticker} markets`;
+      }
     }
 
     if (updatedEl) {
@@ -112,6 +143,47 @@ async function loadSnapshot() {
         forecastHighEl.textContent = '—';
       }
     }
+    if (referenceHighEl) {
+      const gfs = data.open_meteo?.gfs_high;
+      const ecmwf = data.open_meteo?.ecmwf_high;
+      if (gfs != null && ecmwf != null) {
+        const avg = (gfs + ecmwf) / 2;
+        referenceHighEl.textContent = `Open-Meteo avg ${avg.toFixed(1)}°F`;
+      } else if (gfs != null) {
+        referenceHighEl.textContent = `Open-Meteo GFS ${gfs.toFixed(1)}°F`;
+      } else if (ecmwf != null) {
+        referenceHighEl.textContent = `Open-Meteo ECMWF ${ecmwf.toFixed(1)}°F`;
+      } else {
+        referenceHighEl.textContent = '—';
+      }
+    }
+    if (referenceHighBigEl) {
+      const gfs = data.open_meteo?.gfs_high;
+      const ecmwf = data.open_meteo?.ecmwf_high;
+      if (gfs != null && ecmwf != null) {
+        const avg = (gfs + ecmwf) / 2;
+        referenceHighBigEl.textContent = `${Math.round(avg)}°F`;
+      } else if (gfs != null) {
+        referenceHighBigEl.textContent = `${Math.round(gfs)}°F`;
+      } else if (ecmwf != null) {
+        referenceHighBigEl.textContent = `${Math.round(ecmwf)}°F`;
+      } else {
+        referenceHighBigEl.textContent = '—';
+      }
+    }
+    if (referenceHighMetaEl) {
+      const gfs = data.open_meteo?.gfs_high;
+      const ecmwf = data.open_meteo?.ecmwf_high;
+      if (gfs != null && ecmwf != null) {
+        referenceHighMetaEl.textContent = 'Open-Meteo avg';
+      } else if (gfs != null) {
+        referenceHighMetaEl.textContent = 'Open-Meteo GFS';
+      } else if (ecmwf != null) {
+        referenceHighMetaEl.textContent = 'Open-Meteo ECMWF';
+      } else {
+        referenceHighMetaEl.textContent = '—';
+      }
+    }
     if (forecastHighBigEl) {
       const forecastHigh = data.weather?.forecast_high;
       forecastHighBigEl.textContent =
@@ -147,6 +219,70 @@ async function loadSnapshot() {
       }
       const metaCore = period ? `${sourceLabel} · ${period}` : sourceLabel;
       forecastHighMetaEl.textContent = `${prefix}${metaCore}`.trim();
+    }
+
+    const formatIntTemp = (value) => (typeof value === 'number' ? `${Math.round(value)}°F` : '—');
+    const formatOneDec = (value) => (typeof value === 'number' ? `${value.toFixed(1)}°F` : '—');
+    const formatTimestamp = (value) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    };
+
+    if (tableNwsForecastHighEl) {
+      tableNwsForecastHighEl.textContent = formatIntTemp(data.weather?.forecast_high);
+    }
+    if (tableNwsForecastNoteEl) {
+      const period = data.weather?.forecast_period;
+      const updated = formatTimestamp(data.weather?.forecast_updated);
+      if (period && updated) {
+        tableNwsForecastNoteEl.textContent = `${period} · updated ${updated}`;
+      } else if (period) {
+        tableNwsForecastNoteEl.textContent = period;
+      } else {
+        tableNwsForecastNoteEl.textContent = '—';
+      }
+    }
+    if (tableNwsObservedHighEl) {
+      tableNwsObservedHighEl.textContent = formatIntTemp(data.weather?.high_today);
+    }
+    if (tableNwsObservedNoteEl) {
+      const obsTime = formatTimestamp(data.weather?.observation_time);
+      tableNwsObservedNoteEl.textContent = obsTime ? `Observed ${obsTime}` : 'Observed high so far';
+    }
+    if (tableGfsHighEl) {
+      tableGfsHighEl.textContent = formatOneDec(data.open_meteo?.gfs_high);
+    }
+    if (tableGfsNoteEl) {
+      tableGfsNoteEl.textContent = data.open_meteo?.gfs_high != null ? 'Open-Meteo GFS' : '—';
+    }
+    if (tableEcmwfHighEl) {
+      tableEcmwfHighEl.textContent = formatOneDec(data.open_meteo?.ecmwf_high);
+    }
+    if (tableEcmwfNoteEl) {
+      tableEcmwfNoteEl.textContent = data.open_meteo?.ecmwf_high != null ? 'Open-Meteo ECMWF' : '—';
+    }
+    if (tableBlendHighEl) {
+      const gfs = data.open_meteo?.gfs_high;
+      const ecmwf = data.open_meteo?.ecmwf_high;
+      tableBlendHighEl.textContent =
+        gfs != null && ecmwf != null ? formatOneDec((gfs + ecmwf) / 2) : '—';
+    }
+    if (tableBlendNoteEl) {
+      tableBlendNoteEl.textContent = 'Avg of GFS/ECMWF';
+    }
+    if (tableMeteosourceHighEl) {
+      tableMeteosourceHighEl.textContent = formatIntTemp(data.weather?.meteosource_high_today);
+    }
+    if (tableMeteosourceNoteEl) {
+      const source = data.weather?.meteosource_source ? 'Meteosource' : '—';
+      tableMeteosourceNoteEl.textContent = source;
     }
     if (portfolioEl) {
       const portfolioValue = data.portfolio?.portfolio_value;
@@ -493,18 +629,65 @@ async function loadSnapshot() {
     if (exchangeEl) {
       exchangeEl.textContent = 'unknown';
     }
-    subtitleEl.textContent = 'Snapshot unavailable';
+    if (subtitleEl) {
+      subtitleEl.textContent = `Snapshot unavailable${err?.message ? ` · ${err.message}` : ''}`;
+    }
     if (modelsEl) {
       modelsEl.textContent = 'Models unavailable';
     }
     if (forecastHighEl) {
       forecastHighEl.textContent = '—';
     }
+    if (referenceHighEl) {
+      referenceHighEl.textContent = '—';
+    }
+    if (referenceHighBigEl) {
+      referenceHighBigEl.textContent = '—';
+    }
+    if (referenceHighMetaEl) {
+      referenceHighMetaEl.textContent = '—';
+    }
     if (forecastHighBigEl) {
       forecastHighBigEl.textContent = '—';
     }
     if (forecastHighMetaEl) {
       forecastHighMetaEl.textContent = '—';
+    }
+    if (tableNwsForecastHighEl) {
+      tableNwsForecastHighEl.textContent = '—';
+    }
+    if (tableNwsForecastNoteEl) {
+      tableNwsForecastNoteEl.textContent = '—';
+    }
+    if (tableNwsObservedHighEl) {
+      tableNwsObservedHighEl.textContent = '—';
+    }
+    if (tableNwsObservedNoteEl) {
+      tableNwsObservedNoteEl.textContent = '—';
+    }
+    if (tableGfsHighEl) {
+      tableGfsHighEl.textContent = '—';
+    }
+    if (tableGfsNoteEl) {
+      tableGfsNoteEl.textContent = '—';
+    }
+    if (tableEcmwfHighEl) {
+      tableEcmwfHighEl.textContent = '—';
+    }
+    if (tableEcmwfNoteEl) {
+      tableEcmwfNoteEl.textContent = '—';
+    }
+    if (tableBlendHighEl) {
+      tableBlendHighEl.textContent = '—';
+    }
+    if (tableBlendNoteEl) {
+      tableBlendNoteEl.textContent = '—';
+    }
+    if (tableMeteosourceHighEl) {
+      tableMeteosourceHighEl.textContent = '—';
+    }
+    if (tableMeteosourceNoteEl) {
+      tableMeteosourceNoteEl.textContent = '—';
     }
     if (healthEl) {
       healthEl.textContent = 'source unknown · age —';

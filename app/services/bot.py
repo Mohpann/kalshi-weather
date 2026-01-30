@@ -2,7 +2,7 @@
 Kalshi Weather Trading Bot - Main Entry Point
 
 This bot identifies and trades on inefficiencies in Kalshi's Miami temperature markets
-by comparing real-time weather data from wethr.net with market prices.
+by comparing real-time weather data from NWS/Meteosource with market prices.
 """
 
 import os
@@ -149,11 +149,11 @@ class WeatherTradingBot:
     def get_todays_market_ticker(self) -> Optional[str]:
         """
         Determine today's Miami temperature market ticker.
-        Format: KXHIGHMIA-DDMMMYY (e.g., KXHIGHMIA-26JAN26)
+        Format: KXHIGHMIA-YYMMMDD (e.g., KXHIGHMIA-26JAN30)
         """
         today = datetime.now()
-        # Format: 26JAN26
-        date_str = today.strftime("%d%b%y").upper()
+        # Format: 26JAN30
+        date_str = today.strftime("%y%b%d").upper()
         ticker = f"KXHIGHMIA-{date_str}"
         return ticker
 
@@ -165,6 +165,20 @@ class WeatherTradingBot:
         ticker = self.get_todays_market_ticker()
         if not self.series_ticker:
             return ticker
+
+        if self.event_ticker:
+            try:
+                markets_resp = self.kalshi.get_markets(event_ticker=self.event_ticker, status="open", limit=200)
+                markets = markets_resp.get("markets") or markets_resp.get("data") or []
+                for market in markets:
+                    if isinstance(market, dict) and market.get("ticker") == ticker:
+                        return ticker
+                if markets:
+                    first = markets[0]
+                    if isinstance(first, dict) and first.get("ticker"):
+                        return first.get("ticker")
+            except Exception as e:
+                print(f"Warning: event markets lookup failed ({e}); trying series lookup")
 
         try:
             series = self.kalshi.get_series(self.series_ticker)
@@ -544,7 +558,7 @@ class WeatherTradingBot:
         print("="*60)
         
         # Weather info
-        print("\n--- Weather Data (wethr.net) ---")
+        print("\n--- Weather Data (NWS/Meteosource) ---")
         if weather_data:
             print(f"Current Temp: {weather_data.get('current_temp', 'N/A')}°F")
             print(f"Today's High: {weather_data.get('high_today', 'N/A')}°F at {weather_data.get('high_time', 'N/A')}")
@@ -734,10 +748,16 @@ class WeatherTradingBot:
                         "weather": {
                             "current_temp": weather_data.get("current_temp") if isinstance(weather_data, dict) else None,
                             "high_today": weather_data.get("high_today") if isinstance(weather_data, dict) else None,
+                            "observation_time": weather_data.get("observation_time") if isinstance(weather_data, dict) else None,
                             "forecast_high": weather_data.get("forecast_high") if isinstance(weather_data, dict) else None,
                             "forecast_period": weather_data.get("forecast_period") if isinstance(weather_data, dict) else None,
                             "forecast_updated": weather_data.get("forecast_updated") if isinstance(weather_data, dict) else None,
                             "forecast_source": weather_data.get("forecast_source") if isinstance(weather_data, dict) else None,
+                            "meteosource_current_temp": weather_data.get("meteosource_current_temp") if isinstance(weather_data, dict) else None,
+                            "meteosource_high_today": weather_data.get("meteosource_high_today") if isinstance(weather_data, dict) else None,
+                            "meteosource_low_today": weather_data.get("meteosource_low_today") if isinstance(weather_data, dict) else None,
+                            "meteosource_observation_time": weather_data.get("meteosource_observation_time") if isinstance(weather_data, dict) else None,
+                            "meteosource_source": weather_data.get("meteosource_source") if isinstance(weather_data, dict) else None,
                         },
                         "open_meteo": open_meteo,
                         "portfolio": portfolio,

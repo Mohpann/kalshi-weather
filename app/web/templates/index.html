@@ -23,10 +23,17 @@
               Miami high-temperature markets with live orderbooks.
             </p>
           </div>
-          <div class="hero__temp">
-            <div class="hero__temp-label">Forecast High</div>
-            <div class="hero__temp-value" data-field="forecast-high-big">—</div>
-            <div class="hero__temp-meta" data-field="forecast-high-meta">—</div>
+          <div class="hero__temps">
+            <div class="hero__temp">
+              <div class="hero__temp-label">Forecast High</div>
+              <div class="hero__temp-value" data-field="forecast-high-big">—</div>
+              <div class="hero__temp-meta" data-field="forecast-high-meta">—</div>
+            </div>
+            <div class="hero__temp hero__temp--alt">
+              <div class="hero__temp-label">Reference High</div>
+              <div class="hero__temp-value" data-field="reference-high-big">—</div>
+              <div class="hero__temp-meta" data-field="reference-high-meta">—</div>
+            </div>
           </div>
           <div class="hero__actions">
             <a class="btn btn--primary" href="https://kalshi.com/markets/kxhighmia" target="_blank" rel="noreferrer">
@@ -42,46 +49,47 @@
         </div>
       </header>
 
-      <section class="summary">
-        <div class="summary__item">
-          <span>Exchange</span>
-          <strong data-field="exchange">—</strong>
+      <section class="panel panel--forecast-compare">
+        <div class="panel__header">
+          <h2>Forecast High Comparison</h2>
+          <span class="panel__pill">KMIA · Daytime</span>
         </div>
-        <div class="summary__item">
-          <span>Event</span>
-          <strong data-field="event-ticker">—</strong>
-        </div>
-        <div class="summary__item">
-          <span>Weather</span>
-          <strong data-field="weather">—</strong>
-        </div>
-        <div class="summary__item">
-          <span>Forecast High</span>
-          <strong data-field="forecast-high">—</strong>
-        </div>
-        <div class="summary__item">
-          <span>Portfolio Value</span>
-          <strong data-field="portfolio">—</strong>
-        </div>
-        <div class="summary__item">
-          <span>Cash</span>
-          <strong data-field="cash">—</strong>
-        </div>
-        <div class="summary__item">
-          <span>Last update</span>
-          <strong data-field="updated">—</strong>
-        </div>
-        <div class="summary__item">
-          <span>Health</span>
-          <strong data-field="health">—</strong>
-        </div>
-        <div class="summary__item summary__item--wide">
-          <span>Model Cross‑check</span>
-          <strong data-field="models">GFS — · ECMWF — · Δ —</strong>
-        </div>
-        <div class="summary__item summary__item--wide">
-          <span>Orders Note</span>
-          <strong data-field="orders-note">—</strong>
+        <div class="forecast-table">
+          <div class="forecast-table__header">
+            <span>Source</span>
+            <span>Forecast High</span>
+            <span>Notes</span>
+          </div>
+          <div class="forecast-table__row">
+            <span class="forecast-table__source">NWS Point Forecast</span>
+            <span data-field="table-nws-forecast-high">—</span>
+            <span data-field="table-nws-forecast-note">—</span>
+          </div>
+          <div class="forecast-table__row">
+            <span class="forecast-table__source">NWS Station Observed High</span>
+            <span data-field="table-nws-observed-high">—</span>
+            <span data-field="table-nws-observed-note">—</span>
+          </div>
+          <div class="forecast-table__row">
+            <span class="forecast-table__source">Open-Meteo GFS</span>
+            <span data-field="table-openmeteo-gfs-high">—</span>
+            <span data-field="table-openmeteo-gfs-note">—</span>
+          </div>
+          <div class="forecast-table__row">
+            <span class="forecast-table__source">Open-Meteo ECMWF</span>
+            <span data-field="table-openmeteo-ecmwf-high">—</span>
+            <span data-field="table-openmeteo-ecmwf-note">—</span>
+          </div>
+          <div class="forecast-table__row">
+            <span class="forecast-table__source">Open-Meteo Blend</span>
+            <span data-field="table-openmeteo-blend-high">—</span>
+            <span data-field="table-openmeteo-blend-note">—</span>
+          </div>
+          <div class="forecast-table__row">
+            <span class="forecast-table__source">Meteosource Daily High</span>
+            <span data-field="table-meteosource-high">—</span>
+            <span data-field="table-meteosource-note">—</span>
+          </div>
         </div>
       </section>
 

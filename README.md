@@ -5,7 +5,7 @@ An algorithmic trading bot that identifies and trades on inefficiencies in Kalsh
 ## Overview
 
 This bot continuously monitors:
-- **Weather data** from wethr.net (official KMIA station at Miami International Airport)
+- **Weather data** from NWS + Meteosource (KMIA station + point forecasts)
 - **Market data** from Kalshi's "Highest temperature in Miami today?" market
 - **Order book** with live bids and asks
 
@@ -26,9 +26,9 @@ It analyzes discrepancies between observed temperatures and market pricing to id
    - Handles authenticated requests automatically
 
 3. **`weather_scraper.py`** - Weather Data Scraper
-   - Scrapes live temperature data from wethr.net
+   - Fetches live temperature data from NWS + Meteosource
    - Extracts current temp, daily high/low, and observation times
-   - Uses BeautifulSoup for HTML parsing
+   - Uses API clients only (no scraping)
 
 4. **`main.py`** - Trading Bot Main Loop
    - Coordinates data fetching from both sources
@@ -63,7 +63,7 @@ pip install -r requirements.txt
 
 ### Weather Data
 
-**Important**: wethr.net blocks automated scraping with 406 errors. The bot now uses NWS + Meteosource by default.
+**Important**: The bot uses NWS + Meteosource by default.
 
 ### Configuration
 
@@ -118,7 +118,7 @@ The bot will:
 
 ### Example Output
 
-```
+```text
 Testing Kalshi API connection...
 ✓ Connected! Balance: $1000.00
 
@@ -130,7 +130,7 @@ Update interval: 60 seconds
 Status Update: 2026-01-26 21:10:45
 ============================================================
 
---- Weather Data (wethr.net) ---
+--- Weather Data (NWS/Meteosource) ---
 Current Temp: 70°F
 Today's High: 88°F at 2:21 PM
 Today's Low: 70°F at 9:10 PM
@@ -149,7 +149,7 @@ YES side (top 3):
   2. Price: 65¢, Qty: 200
   3. Price: 64¢, Qty: 150
 ...
-```
+```text
 
 ## Development Guide
 
@@ -161,7 +161,7 @@ The trading strategy goes in `main.py` → `analyze_opportunity()`:
 def analyze_opportunity(self, weather_data, market_data, orderbook):
     # Your strategy here
     # Example: If it's 8pm and high is 88°F, market should reflect that
-    
+
     if analysis['has_opportunity']:
         # Place order via:
         self.kalshi.place_order(
@@ -179,9 +179,9 @@ def analyze_opportunity(self, weather_data, market_data, orderbook):
 **Market Ticker Format**: `KXHIGHMIA-26JAN26` (date-based)
 - The bot automatically generates today's ticker
 
-**Temperature Resolution**: 
+**Temperature Resolution**:
 - Markets settle based on official KMIA station readings
-- Wethr.net scrapes the same official source
+- NWS station observations are used as the primary source
 - Temperature is recorded in whole degrees Fahrenheit
 
 **Pricing**:
@@ -204,7 +204,7 @@ print(c.get_balance())"
 
 ### Alternative Weather Data Sources
 
-Since wethr.net blocks scraping, the bot now uses:
+The bot now uses:
 1. **NWS API** (NOAA station observations)
 2. **Meteosource API** (free tier)
 3. **Open‑Meteo** (forecast cross-check)
@@ -212,7 +212,7 @@ Since wethr.net blocks scraping, the bot now uses:
 ## Important Notes
 
 ### Market Timing
-- Wethr.net does NOT release forecasts for the next day
+- Forecast highs come from NWS point forecasts
 - Bot focuses on current day's market only
 - Best opportunities often late in the day when high is established
 
@@ -224,7 +224,7 @@ Since wethr.net blocks scraping, the bot now uses:
 - Monitor for API rate limits
 
 ### Data Sources
-- **Weather**: NWS API + Meteosource (wethr.net only as a last-resort scrape)
+- **Weather**: NWS API + Meteosource
 - **Market**: [kalshi.com/markets/kxhighmia](https://kalshi.com/markets/kxhighmia)
 - **API Docs**: [docs.kalshi.com](https://docs.kalshi.com)
 

@@ -21,7 +21,6 @@ def test_imports():
     try:
         import requests
         import cryptography
-        from bs4 import BeautifulSoup
         print("  ✓ All dependencies installed\n")
         return True
     except ImportError as e:
@@ -146,7 +145,7 @@ def test_market_data():
 def test_weather_scraper():
     """Test weather data scraping."""
     print("Testing weather scraper...")
-    print("  ⚠ Note: wethr.net blocks automated requests")
+    print("  ⚠ Note: Weather data now uses NWS/Meteosource only")
     print("  This feature requires either:")
     print("    - A browser automation tool (Selenium/Playwright)")
     print("    - A proxy service")

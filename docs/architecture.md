@@ -32,7 +32,7 @@ This project has two primary execution paths:
   - Weather ingestion with fallback chain:
     1) NWS station observations (KMIA)
     2) Meteosource (free tier)
-    3) Wethr.net scrape (last resort)
+    3) Meteosource (fallback for missing NWS fields)
 
 - `app/data/nws_client.py`
   - NWS API client (station observations)
@@ -52,13 +52,13 @@ This project has two primary execution paths:
 ## Data Flow
 
 ### Bot loop
-```
-weather_scraper -> (NWS/Meteosource/Wethr) -> weather_data
+```text
+weather_scraper -> (NWS/Meteosource) -> weather_data
 kalshi_client -> market + orderbook + portfolio + positions
 open_meteo -> forecast highs
 analyze_opportunity(weather, market, orderbook) -> recommendation
 write snapshot.json -> consumed by dashboard
-```
+```text
 
 ### Dashboard
 ```

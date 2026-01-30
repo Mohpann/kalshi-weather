@@ -15,7 +15,7 @@ python3 main.py
 
 # OR use the quick start script:
 ./run.sh
-```
+```text
 
 ## Daily Workflow
 
@@ -83,14 +83,14 @@ Edit `main.py` → `analyze_opportunity()`:
 def analyze_opportunity(self, weather_data, market_data, orderbook):
     current_temp = weather_data.get('current_temp')
     high_today = weather_data.get('high_today')
-    
+
     # Example: Late day, high established
     if is_after_6pm and high_today > 85:
         # Market should reflect this
         # Compare with orderbook prices
         # Return trading decision
         pass
-    
+
     return {'has_opportunity': False, ...}
 ```
 
@@ -109,8 +109,14 @@ print(c.get_balance())"
 
 ## Common Issues
 
-**"406 Not Acceptable" from wethr.net**
-→ NWS/Meteosource should still provide data; wethr.net is only a last-resort scrape
+**Weather data issues**
+→ NWS/Meteosource should provide data; check API keys and station coordinates
+
+## Optional Tuning
+
+- `NWS_LAT` / `NWS_LON` to pin station location (KMIA coords)
+- `NWS_CACHE_TTL` to throttle NWS fetches (seconds)
+- `SNAPSHOT_CACHE_TTL` to throttle dashboard snapshot reads (seconds)
 
 **"Connection refused" to Kalshi**
 → Check internet connection, verify API endpoint
@@ -146,6 +152,6 @@ base_url = "https://api.kalshi.com"
 
 - [Kalshi API Docs](https://docs.kalshi.com)
 - [Miami Market](https://kalshi.com/markets/kxhighmia)
-- [Weather Data](https://wethr.net/market/miami)
+- NWS station observations (KMIA)
 - [Full README](README.md)
 - [Copilot Instructions](.github/copilot-instructions.md)
